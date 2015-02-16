@@ -1,0 +1,12 @@
+
+*.xcworkspacedata
+
+*.xcuserstate
+
+*.xcexplist
+
+*.xcbkptlist
+
+*.xcscheme
+
+BottomUp_Local.xcodeproj/xcuserdata/seanrpurser-haskell.xcuserdatad/xcschemes/xcschememanagement.plist

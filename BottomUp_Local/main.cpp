@@ -17,7 +17,7 @@
 using namespace std;
 
 const float time_epsilon = 0.005f;
-const float min_d = 0.002f;
+const float min_d = 0.001f;
 const int n_interactions = 8;
 
 std::unique_ptr<LocalSystem> local_system;
@@ -51,7 +51,8 @@ struct BoxAffecter : public ParticleAffecter {
     }
     
     const Extrema2f bounds;
-}box_affecter(Extrema2f(Vec2f(-1, -1) * 0.2f, Vec2f(1, 1) * 0.2f));
+    //}box_affecter(Extrema2f(Vec2f(-1, -1) * 0.3f, Vec2f(1, 1) * 0.3f));
+}box_affecter(Extrema2f(Vec2f(-1, -1) * 0.15f, Vec2f(1, 1) * 0.15f));
 
 // Kind of like wind resistance or something
 struct TooFastAffecter : public ParticleAffecter {
@@ -137,7 +138,7 @@ Init(void)
         },
         {
             // Coefficient
-            -0.00000006f,
+            -0.0000001f,
             // Power
             3,
             // Charge product?
@@ -227,27 +228,27 @@ Init(void)
 
     local_system.reset(new LocalSystem(particle_types, n_interactions, min_d, time_epsilon));
     
-#if 0
-    vector<Vec2f> pos = RandomParticles(1500, min_d);
+#if 1
+    vector<Vec2f> pos = RandomParticles(2000, min_d);
     for(Vec2f const&p : pos) {
         // Need to nudge the particles a bit so they don't "fall into each other" as much
-        local_system->AddParticle(ParticleState((runi() < 0.3f) ? 1 : 2, p * 0.2f, rvel() * 0.0f));
+        local_system->AddParticle(ParticleState((runi() < 0.5f) ? 1 : 2, p * 0.15f, rvel() * 0.0f));
     }
 #endif
     
-    const float blob_r = 0.05f;
-#if 1
+#if 0
+    const float blob_r = 0.08f;
     // Oil
     for(int i=0;i<500;++i) {
         local_system->AddParticle(ParticleState(1, Vec2f(-2 * blob_r, -blob_r) + Vec2f(blob_r * runi(), blob_r * runi()),
                                                     Vec2f(0.1f,0)));
     }
-#endif
     // Water
     for(int i=0;i<500;++i) {
         local_system->AddParticle(ParticleState(2, Vec2f(2 * blob_r, -blob_r) + Vec2f(blob_r * runi(), blob_r * runi()),
                                                 Vec2f(-0.1f,0)));
     }
+#endif
 }
 
 /* ARGSUSED1 */

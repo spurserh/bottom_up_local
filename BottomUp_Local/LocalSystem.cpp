@@ -49,9 +49,13 @@ void ParticleState::AffectBy(ParticleState const&o, float t, float min_d, Partic
         vel += accel_vec * t;
 }
 
-LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types, float min_d, float time_epsilon)
+LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types,
+                         int n_interactions,
+                         float min_d,
+                         float time_epsilon)
   : min_d_(min_d),
     time_epsilon_(time_epsilon),
+    n_interactions_(n_interactions),
     time_remainder_(0) {
     for(ParticleType const&type : particle_types) {
         types_by_id_.insert(ParticleTypeById::value_type(type.id, type));
@@ -77,8 +81,8 @@ void LocalSystem::GetParticles(std::vector<ParticleState> &output)const {
 }
 
 void LocalSystem::Iterate(float time, std::vector<ParticleAffecter const*> const&extra_affecters) {
-    // TODO: Make this a parameter
-    const size_t n_interact = 1 + 3;
+    // Closest is always self
+    const size_t n_interact = 1 + n_interactions_;
     
     time_remainder_ += time;
     

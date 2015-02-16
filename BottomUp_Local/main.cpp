@@ -17,7 +17,8 @@
 using namespace std;
 
 const float time_epsilon = 0.005f;
-const float min_d = 0.0005f;
+const float min_d = 0.002f;
+const int n_interactions = 8;
 
 std::unique_ptr<LocalSystem> local_system;
 struct BoxAffecter : public ParticleAffecter {
@@ -50,8 +51,9 @@ struct BoxAffecter : public ParticleAffecter {
     }
     
     const Extrema2f bounds;
-}box_affecter(Extrema2f(Vec2f(-1, -1) * 0.5f, Vec2f(1, 1) * 0.5f));
+}box_affecter(Extrema2f(Vec2f(-1, -1) * 0.2f, Vec2f(1, 1) * 0.2f));
 
+// Kind of like wind resistance or something
 struct TooFastAffecter : public ParticleAffecter {
     TooFastAffecter(float speed_limit)
     : speed_limit(speed_limit) {
@@ -61,12 +63,11 @@ struct TooFastAffecter : public ParticleAffecter {
     void Affect(ParticleState &particle, float time_slice)const override {
         const float speed = particle.vel.Length();
         if(speed > speed_limit)
-            particle.vel *= speed_limit / speed;
+            particle.vel *= 1.0f / ::pow(speed / speed_limit, 2);
     }
     
     const float speed_limit;
 }speed_limiter(0.1f);
-
 std::vector<ParticleAffecter const*> affecters = {&box_affecter, &speed_limiter};
 
 float runi() {
@@ -123,25 +124,82 @@ vector<Vec2f> RandomParticles(const size_t n, const float min_radius) {
 static void
 Init(void)
 {
+    // No speed limit
     std::vector<std::tuple<float,float, bool> > default_coeffs = {
         // Like particles attract
         {
             // Coefficient
-            0.00002,
+            0.00002f,
             // Power
             2,
             // Charge product?
             true,
         },
+        {
+            // Coefficient
+            -0.00000006f,
+            // Power
+            3,
+            // Charge product?
+            false,
+        },
+    };
+#if 0
+    // No speed limit
+    std::vector<std::tuple<float,float, bool> > default_coeffs = {
+        // Like particles attract
+        {
+            // Coefficient
+            0.000004f,
+            // Power
+            2,
+            // Charge product?
+            true,
+        },
+        /*
+         // But also repel a bit closer
+         {
+         // Coefficient
+         -0.00001,
+         // Power
+         2,
+         // Charge product?
+         false,
+         },
+         */
+        {
+            // Coefficient
+            -0.00000002f,
+            // Power
+            3,
+            // Charge product?
+            false,
+        },
+    };
+#endif
+#if 0
+    // Speed limit = 0.1
+    std::vector<std::tuple<float,float, bool> > default_coeffs = {
+        // Like particles attract
+        {
+            // Coefficient
+            0.0001,
+            // Power
+            2,
+            // Charge product?
+            true,
+        },
+        /*
         // But also repel a bit closer
         {
             // Coefficient
-            -0.00002,
+            -0.00001,
             // Power
             2,
             // Charge product?
             false,
         },
+         */
         {
             // Coefficient
             -0.0000001,
@@ -151,6 +209,7 @@ Init(void)
             false,
         },
     };
+#endif
     vector<ParticleType> particle_types;
     const ParticleType type_1(1,
                                default_coeffs,
@@ -166,11 +225,28 @@ Init(void)
     particle_types.push_back(type_1);
     particle_types.push_back(type_2);
 
-    local_system.reset(new LocalSystem(particle_types, min_d, time_epsilon));
+    local_system.reset(new LocalSystem(particle_types, n_interactions, min_d, time_epsilon));
+    
+#if 0
     vector<Vec2f> pos = RandomParticles(1500, min_d);
     for(Vec2f const&p : pos) {
         // Need to nudge the particles a bit so they don't "fall into each other" as much
         local_system->AddParticle(ParticleState((runi() < 0.3f) ? 1 : 2, p * 0.2f, rvel() * 0.0f));
+    }
+#endif
+    
+    const float blob_r = 0.05f;
+#if 1
+    // Oil
+    for(int i=0;i<500;++i) {
+        local_system->AddParticle(ParticleState(1, Vec2f(-2 * blob_r, -blob_r) + Vec2f(blob_r * runi(), blob_r * runi()),
+                                                    Vec2f(0.1f,0)));
+    }
+#endif
+    // Water
+    for(int i=0;i<500;++i) {
+        local_system->AddParticle(ParticleState(2, Vec2f(2 * blob_r, -blob_r) + Vec2f(blob_r * runi(), blob_r * runi()),
+                                                Vec2f(-0.1f,0)));
     }
 }
 
@@ -184,6 +260,9 @@ Key(unsigned char key, int x, int y)
         case ' ':
             Init();
             glutPostRedisplay();
+            break;
+        case 'p':
+            
             break;
     }
 }
@@ -217,7 +296,10 @@ Draw(void)
     glLineWidth(1);
     glBegin(GL_LINES);
     for(ParticleState const&particle : particles) {
-        glColor4f(0,1,0,0.5);
+        if(particle.typeId == 1)
+            glColor4f(0,1,0,0.5);
+        else
+            glColor4f(1,0,0,0.5);
         glVertex2f(particle.pos.x, particle.pos.y);
         const Vec2f p_v = particle.pos + particle.vel * 0.03f;
         glVertex2f(p_v.x, p_v.y);

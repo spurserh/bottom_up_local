@@ -57,6 +57,7 @@ struct ParticleAffecter {
 struct LocalSystem
 {
     LocalSystem(std::vector<ParticleType> const&particle_types,
+                int n_interactions,
                 float min_d,
                 float time_epsilon);
     void AddParticle(ParticleState const&initial);
@@ -69,6 +70,7 @@ private:
     std::vector<ParticleState> particles_;
     const float min_d_, time_epsilon_;
     float time_remainder_;
+    const int n_interactions_;
     
     Vec2i CellIndex(Vec2f const&position)const;
 };

@@ -21,26 +21,23 @@ void ConstantDensityPointSearcher::Build(std::vector<Vec2f> const&points) {
     point_indices_to_consider_for_cell_.clear();
     ref_points_.clear();
     original_points_.clear();
-    index_by_location_.clear();
     dbg_max_points_considered = 0;
     
     set<Vec2i> cells;
-    multimap<Vec2i, Vec2f> points_by_cell;
-    for(Vec2f const&p : points) {
+    multimap<Vec2i, size_t> points_by_cell;
+    for(size_t pi = 0;pi < points.size();++pi) {
+        Vec2f const&p = points[pi];
         const Vec2i cell = CellForPoint(p);
         cells.insert(cell);
-        points_by_cell.insert(multimap<Vec2i, Vec2f>::value_type(cell, p));
+        points_by_cell.insert(multimap<Vec2i, size_t>::value_type(cell, pi));
     }
-    
-    for(size_t pi=0;pi<points.size();++pi)
-        index_by_location_[points[pi]] = pi;
     
     for(Vec2i const&cell : cells) {
         Extrema1i cell_indices(Vec1i((int)ref_points_.size()), Vec1i(-1));
         for(int row = -1;row <= 1;++row) {
             for(int col = -1;col <= 1;++col) {
                 const Vec2i this_cell(cell + Vec2i(col, row));
-                for(multimap<Vec2i, Vec2f>::const_iterator it = points_by_cell.lower_bound(this_cell);
+                for(multimap<Vec2i, size_t>::const_iterator it = points_by_cell.lower_bound(this_cell);
                     it != points_by_cell.upper_bound(this_cell);
                     ++it) {
                     ref_points_.push_back(it->second);
@@ -81,7 +78,7 @@ void ConstantDensityPointSearcher::SearchNearestK(Vec2f const&pt, size_t *output
         return;
     }
     for(int i = it->second.mMin[0];i < it->second.mMax[0];++i) {
-        priority_queue.push(index_by_location_.find(ref_points_[i])->second);
+        priority_queue.push(ref_points_[i]);
     }
 
     for(size_t i=0;!priority_queue.empty() && i < k;++i) {

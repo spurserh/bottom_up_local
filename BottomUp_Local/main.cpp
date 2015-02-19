@@ -14,6 +14,8 @@
 #include "KDTreePointSearcher.h"
 #include "ConstantDensityPointSearcher.h"
 
+#include <OpenCL/opencl.h>
+
 #include "kdtree2.hpp"
 
 using namespace std;
@@ -227,10 +229,18 @@ Init(void)
                               );
     particle_types.push_back(type_1);
     particle_types.push_back(type_2);
+    
+    cl_device_id device_id = 0;
+    int err = clGetDeviceIDs(NULL, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+    if (err != CL_SUCCESS)
+    {
+        printf("Error: Failed to create a device group!\n");
+        exit(1);
+    }
 
-    std::unique_ptr<PointSearcher> point_searcher(new KDTreePointSearcher);
-//    std::unique_ptr<PointSearcher> point_searcher(new ConstantDensityPointSearcher(0.15f / 25.0f));
-    local_system.reset(new LocalSystem(particle_types, point_searcher, n_interactions, min_d, time_epsilon));
+//    std::unique_ptr<PointSearcher> point_searcher(new KDTreePointSearcher);
+    std::unique_ptr<PointSearcher> point_searcher(new ConstantDensityPointSearcher(0.15f / 25.0f));
+    local_system.reset(new LocalSystem(particle_types, point_searcher, n_interactions, min_d, time_epsilon, true, device_id));
     
 #if 1
     vector<Vec2f> pos = RandomParticles(2000, min_d);

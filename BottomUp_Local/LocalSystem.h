@@ -17,6 +17,8 @@
 #include "Vec2f.h"
 #include <cassert>
 
+#include <OpenCL/opencl.h>
+
 typedef unsigned ParticleTypeId;
 extern const unsigned ParticleTypeId_Null;
 
@@ -56,13 +58,17 @@ struct ParticleAffecter {
     void Affect(ParticleState &particle, float time_slice)const=0;
 };
 
+struct ConstantDensityPointSearcher;
+
 struct LocalSystem
 {
     LocalSystem(std::vector<ParticleType> const&particle_types,
                 std::unique_ptr<PointSearcher> &point_searcher,
                 int n_interactions,
                 float min_d,
-                float time_epsilon);
+                float time_epsilon,
+                bool use_opencl,
+                cl_device_id device);
     void AddParticle(ParticleState const&initial);
     void GetParticles(std::vector<ParticleState> &output)const;
     
@@ -75,6 +81,20 @@ private:
     const float min_d_, time_epsilon_;
     float time_remainder_;
     const int n_interactions_;
+
+    const bool use_opencl_;
+    // OpenCL
+    ConstantDensityPointSearcher *searcher_constant_;
+    /*
+    cl_mem cl_positions_;
+    cl_mem cl_input_velocities_, cl_output_velocities_;
+    cl_mem cl_cell_point_indices_;
+    */
+    cl_device_id cl_device_;
+    cl_context cl_context_;
+    cl_command_queue cl_commands_;
+    cl_program cl_program_;
+    cl_kernel cl_kernel_;
     
     Vec2i CellIndex(Vec2f const&position)const;
 };

@@ -7,7 +7,6 @@
 //
 
 #include "LocalSystem.h"
-#include "kdtree2.hpp"
 
 using namespace std;
 
@@ -50,12 +49,14 @@ void ParticleState::AffectBy(ParticleState const&o, float t, float min_d, Partic
 }
 
 LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types,
+                         std::unique_ptr<PointSearcher> &point_searcher,
                          int n_interactions,
                          float min_d,
                          float time_epsilon)
   : min_d_(min_d),
     time_epsilon_(time_epsilon),
     n_interactions_(n_interactions),
+    point_searcher_(std::move(point_searcher)),
     time_remainder_(0) {
     for(ParticleType const&type : particle_types) {
         types_by_id_.insert(ParticleTypeById::value_type(type.id, type));
@@ -87,31 +88,28 @@ void LocalSystem::Iterate(float time, std::vector<ParticleAffecter const*> const
     time_remainder_ += time;
     
     while(time_remainder_ > time_epsilon_) {
-        multi_array<float, 2> points;
-        points.resize(extents[particles_.size()][2]);
-        for(size_t i=0;i<particles_.size();++i) {
-            points[i][0] = particles_[i].pos.x;
-            points[i][1] = particles_[i].pos.y;
+        vector<Vec2f> points;
+        for(ParticleState const&particle : particles_) {
+            points.push_back(particle.pos);
         }
-        // TODO: Parallelize
-        kdtree2 kd_tree(points);
+        point_searcher_->Build(points);
         
         const float time_slice = std::min(time_remainder_, time_epsilon_);
         time_remainder_ -= time_slice;
         vector<ParticleState> next_particles;
-        vector<const ParticleState *const *> nearest_k;
+        vector<size_t> nearest_k;
         
         float total_velocity = 0.0f, next_total_velocity = 0.0f;;
         
         // TODO: Parallelize, use GPU?
         for(ParticleState const&a : particles_) {
             ParticleState next_particle(a);
-            kdtree2_result_vector nearest_k;
-            vector<float> qv = {a.pos.x, a.pos.y};
-            kd_tree.n_nearest(qv, n_interact, nearest_k);
+            
+            nearest_k.resize(n_interact);
+            point_searcher_->SearchNearestK(a.pos, &nearest_k[0], n_interact);
             
             for(int i=0;i<n_interact;++i) {
-                ParticleState const&b = particles_[nearest_k[i].idx];
+                ParticleState const&b = particles_[nearest_k[i]];
                 // Closest is always self..
                 if(&a == &b)
                     continue;

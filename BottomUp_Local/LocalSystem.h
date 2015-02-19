@@ -12,6 +12,8 @@
 #include <vector>
 #include <map>
 
+#include "PointSearcher.h"
+
 #include "Vec2f.h"
 #include <cassert>
 
@@ -57,6 +59,7 @@ struct ParticleAffecter {
 struct LocalSystem
 {
     LocalSystem(std::vector<ParticleType> const&particle_types,
+                std::unique_ptr<PointSearcher> &point_searcher,
                 int n_interactions,
                 float min_d,
                 float time_epsilon);
@@ -68,6 +71,7 @@ private:
     
     ParticleTypeById types_by_id_;
     std::vector<ParticleState> particles_;
+    std::unique_ptr<PointSearcher> point_searcher_;
     const float min_d_, time_epsilon_;
     float time_remainder_;
     const int n_interactions_;

@@ -88,7 +88,7 @@ void ConstantDensityPointSearcher::SearchNearestK(Vec2f const&pt, size_t *output
 }
 
 Vec2i ConstantDensityPointSearcher::CellForPoint(Vec2f const&p)const {
-    return Vec2i(int(p.x / cell_width_), int(p.y / cell_width_));
+    return Vec2i(int(::floor(p.x / cell_width_)), int(::floor(p.y / cell_width_)));
 }
 
 

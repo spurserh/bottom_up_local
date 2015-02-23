@@ -91,7 +91,7 @@ private:
     cl_program cl_program_;
     cl_kernel cl_kernel_;
     void MakeIndicesSquare(std::vector<Extrema1i> &ranges,
-                           Vec2i &size_out);
+                           Extrema2i &cell_extents);
     
     Vec2i CellIndex(Vec2f const&position)const;
 };

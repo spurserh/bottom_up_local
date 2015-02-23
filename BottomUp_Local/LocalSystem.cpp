@@ -98,20 +98,34 @@ LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types,
         const char* KernelSource =
             R"(__kernel void affect(
                 __global const float2* pos,
-                __global const float2* vel_in,
                 __global const int2* cell_affected_ranges,
+                __global const unsigned int* cell_affected_indices,
                 __global float2* vel_offset_out,
                 const float t,
+                const unsigned int cell_ranges_width,
                 const unsigned int particle_count) {
                     const float cell_width = %ff;
                     const float min_d = %ff;
                     const unsigned int particle_index = get_global_id(0);
                     if(particle_index < particle_count) {
-                        const float2 pos = pos[particle_index];
-                        //const int2 cell_index = int2(pos / cell_width);
-                        // TODO
-                        // TODO: Avoid interacting with self
-                        vel_offset_out[particle_index] = float2(-0.1, 0);
+                        const float2 a_pos = pos[particle_index];
+                        const int2 cell_index = (int2)(floor(a_pos.x / cell_width), floor(a_pos.y / cell_width));
+                        const int2 cell_range = cell_affected_ranges[cell_index.y * cell_ranges_width + cell_index.x];
+                        float2 vel_offset = (float2)(0.0f,0.0f);
+                        /*
+                        for(int affected_index = cell_range.x;affected_index < cell_range.y;++affected_index) {
+                            // TODO: Avoid interacting with self
+                            // TODO: Optimization? Avoid using another layer of indices
+                          //  const float2 affected_pos = pos[cell_affected_indices[affected_index]];
+                          //  vel_offset += normalize(a_pos - affected_pos) * t * 0.1f;
+                            vel_offset += (float2)(-0.2f, 0.0f);
+                        }
+                         */
+                        //vel_offset += (float2)(particle_index / 2000.0f, 0.0f);
+                        //vel_offset += (float2)(cell_index.x, cell_index.y);
+                        //vel_offset += normalize(a_pos) * t * 0.1f;
+                        //vel_offset_out[particle_index] = vel_offset;
+                        vel_offset_out[particle_index] = (float2)(cell_index.x, cell_index.y);
                     }
                 })";
         
@@ -119,6 +133,8 @@ LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types,
         kernel_subbed.resize(strlen(KernelSource) + 1024);
         sprintf(&kernel_subbed[0], KernelSource, searcher_constant_->cell_width_, min_d);
         char const*const kernel_subbed_ptr = &kernel_subbed[0];
+        
+        fprintf(stderr, "kernel %s\n", kernel_subbed_ptr);
         
         // Create the compute program from the source buffer
         //
@@ -132,14 +148,14 @@ LocalSystem::LocalSystem(std::vector<ParticleType> const&particle_types,
         // Build the program executable
         //
         err = clBuildProgram(cl_program_, 0, NULL, NULL, NULL, NULL);
+        size_t len;
+        char buffer[2048];
+        clGetProgramBuildInfo(cl_program_, cl_device_, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+        printf("%s\n", buffer);
+
         if (err != CL_SUCCESS)
         {
-            size_t len;
-            char buffer[2048];
-            
             printf("Error: Failed to build program executable!\n");
-            clGetProgramBuildInfo(cl_program_, cl_device_, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-            printf("%s\n", buffer);
             exit(1);
         }
         
@@ -160,6 +176,29 @@ void LocalSystem::AddParticle(ParticleState const&initial) {
 
 void LocalSystem::GetParticles(std::vector<ParticleState> &output)const {
     std::copy(particles_.begin(), particles_.end(), std::back_inserter(output));
+}
+
+void LocalSystem::MakeIndicesSquare(std::vector<Extrema1i> &ranges,
+                                    Vec2i &size_out) {
+    Extrema2i cell_extents(Vec2i(INT_MAX, INT_MAX), Vec2i(-INT_MAX, -INT_MAX));
+    for(auto it : searcher_constant_->point_indices_to_consider_for_cell_) {
+        cell_extents.DoEnclose(it.first);
+        cell_extents.DoEnclose(it.first + Vec2i(1,1));
+    }
+    
+    size_out = cell_extents.GetSize();
+    ranges.resize(size_out.width * size_out.height, Extrema1i(Vec1i(0), Vec1i(0)));
+    for(int row = cell_extents.mMin.y;row < cell_extents.mMax.y;++row) {
+        for(int col = cell_extents.mMin.x;col < cell_extents.mMax.x;++col) {
+            auto found = searcher_constant_->point_indices_to_consider_for_cell_.find(Vec2i(col, row));
+            if(found != searcher_constant_->point_indices_to_consider_for_cell_.end()) {
+                const int row_r = row - cell_extents.mMin.y;
+                const int col_r = col - cell_extents.mMin.x;
+                assert((row_r*size_out.width+col_r) < ranges.size());
+                ranges[row_r*size_out.width+col_r] = found->second;
+            }
+        }
+    }
 }
 
 void LocalSystem::Iterate(float time, std::vector<ParticleAffecter const*> const&extra_affecters) {
@@ -198,7 +237,73 @@ void LocalSystem::Iterate(float time, std::vector<ParticleAffecter const*> const
                 }
             }
         } else {
+            unsigned int count = (unsigned int)particles_.size();
+            cl_mem cl_pos, cl_cell_affected_ranges, cl_cell_affected_indices, cl_vel_offset_out;
+            cl_pos = clCreateBuffer(cl_context_,  CL_MEM_READ_ONLY,  sizeof(float) * 2 * particles_.size(), NULL, NULL);
+            cl_vel_offset_out = clCreateBuffer(cl_context_,  CL_MEM_WRITE_ONLY,  sizeof(float) * 2 * particles_.size(), NULL, NULL);
+            vector<Vec2f> pos_data;
+            pos_data.resize(particles_.size());
             
+            for(size_t i=0;i<particles_.size();++i)
+                pos_data[i] = particles_[i].pos;
+            
+            vector<Extrema1i> ranges;
+            Vec2i ranges_size;
+            
+            MakeIndicesSquare(ranges, ranges_size);
+            
+            int err = clEnqueueWriteBuffer(cl_commands_, cl_pos, CL_TRUE, 0, sizeof(float) * 2 * particles_.size(), &pos_data[0], 0, NULL, NULL);
+            assert(err == CL_SUCCESS);
+            cl_cell_affected_indices = clCreateBuffer(cl_context_,  CL_MEM_READ_ONLY,  sizeof(int) * searcher_constant_->ref_points_.size(), NULL, NULL);
+            cl_cell_affected_ranges = clCreateBuffer(cl_context_,  CL_MEM_READ_ONLY,  sizeof(int) * 2 * ranges.size(), NULL, NULL);
+            err = clEnqueueWriteBuffer(cl_commands_, cl_cell_affected_indices, CL_TRUE, 0, sizeof(int) * searcher_constant_->ref_points_.size(), &searcher_constant_->ref_points_[0], 0, NULL, NULL);
+            assert(err == CL_SUCCESS);
+            err = clEnqueueWriteBuffer(cl_commands_, cl_cell_affected_ranges, CL_TRUE, 0, sizeof(int) * 2 * ranges.size(), &ranges[0], 0, NULL, NULL);
+            assert(err == CL_SUCCESS);
+            
+            err = 0;
+            err  = clSetKernelArg(cl_kernel_, 0, sizeof(cl_mem), &cl_pos);
+            err |= clSetKernelArg(cl_kernel_, 1, sizeof(cl_mem), &cl_cell_affected_ranges);
+            err |= clSetKernelArg(cl_kernel_, 2, sizeof(cl_mem), &cl_cell_affected_indices);
+            err |= clSetKernelArg(cl_kernel_, 3, sizeof(cl_mem), &cl_vel_offset_out);
+            err |= clSetKernelArg(cl_kernel_, 4, sizeof(float), &time_slice);
+            err |= clSetKernelArg(cl_kernel_, 5, sizeof(unsigned int), &ranges_size.width);
+            err |= clSetKernelArg(cl_kernel_, 6, sizeof(unsigned int), &count);
+            assert(err == CL_SUCCESS);
+
+            size_t global;                      // global domain size for our calculation
+            size_t local;                       // local domain size for our calculation
+            
+            err = clGetKernelWorkGroupInfo(cl_kernel_, cl_device_, CL_KERNEL_WORK_GROUP_SIZE, sizeof(local), &local, NULL);
+            assert(err == CL_SUCCESS);
+            
+            local = 16;
+            
+            // Execute the kernel over the entire range of our 1d input data set
+            // using the maximum number of work group items for this device
+            //
+            global = count;
+            err = clEnqueueNDRangeKernel(cl_commands_, cl_kernel_, 1, NULL, &global, &local, 0, NULL, NULL);
+            assert(err == CL_SUCCESS);
+            
+            clFinish(cl_commands_);
+            
+            vector<Vec2f> vel_offset_data;
+            vel_offset_data.resize(count);
+            
+            // Blocking
+            err = clEnqueueReadBuffer(cl_commands_, cl_vel_offset_out, CL_TRUE, 0, sizeof(float) * 2 * count, &vel_offset_data[0], 0, NULL, NULL );
+            assert(err == CL_SUCCESS);
+
+            clReleaseMemObject(cl_pos);
+            clReleaseMemObject(cl_cell_affected_ranges);
+            clReleaseMemObject(cl_cell_affected_indices);
+            clReleaseMemObject(cl_vel_offset_out);
+            
+            for(size_t particle_index = 0;particle_index < particles_.size();++particle_index) {
+                ParticleState &next_particle = next_particles[particle_index];
+                next_particle.vel += vel_offset_data[particle_index];
+            }
         }
         for(size_t particle_index = 0;particle_index < particles_.size();++particle_index) {
             ParticleState &next_particle = next_particles[particle_index];

@@ -231,7 +231,8 @@ Init(void)
     particle_types.push_back(type_2);
     
     cl_device_id device_id = 0;
-    int err = clGetDeviceIDs(NULL, CL_DEVICE_TYPE_GPU, 1, &device_id, NULL);
+    fprintf(stderr, "TODO: Try CL_DEVICE_TYPE_GPU, auto work group size");
+    int err = clGetDeviceIDs(NULL, CL_DEVICE_TYPE_CPU, 1, &device_id, NULL);
     if (err != CL_SUCCESS)
     {
         printf("Error: Failed to create a device group!\n");

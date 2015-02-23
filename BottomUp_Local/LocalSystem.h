@@ -85,16 +85,13 @@ private:
     const bool use_opencl_;
     // OpenCL
     ConstantDensityPointSearcher *searcher_constant_;
-    /*
-    cl_mem cl_positions_;
-    cl_mem cl_input_velocities_, cl_output_velocities_;
-    cl_mem cl_cell_point_indices_;
-    */
     cl_device_id cl_device_;
     cl_context cl_context_;
     cl_command_queue cl_commands_;
     cl_program cl_program_;
     cl_kernel cl_kernel_;
+    void MakeIndicesSquare(std::vector<Extrema1i> &ranges,
+                           Vec2i &size_out);
     
     Vec2i CellIndex(Vec2f const&position)const;
 };

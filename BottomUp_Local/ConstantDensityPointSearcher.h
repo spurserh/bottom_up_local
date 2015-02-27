@@ -28,7 +28,7 @@ private:
     const float cell_width_;
     int dbg_max_points_considered;
     std::map<Vec2i, Extrema1i> point_indices_to_consider_for_cell_;
-    std::vector<size_t> ref_points_;
+    std::vector<int> ref_points_;
     std::vector<Vec2f> original_points_;
 
     Vec2i CellForPoint(Vec2f const&p)const;

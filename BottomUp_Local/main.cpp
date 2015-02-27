@@ -244,8 +244,8 @@ Init(void)
     local_system.reset(new LocalSystem(particle_types, point_searcher, n_interactions, min_d, time_epsilon, true, device_id));
     
 #if 1
-    vector<Vec2f> pos = RandomParticles(2000, min_d);
-//    vector<Vec2f> pos = RandomParticles(1000, min_d);
+//    vector<Vec2f> pos = RandomParticles(2000, min_d);
+    vector<Vec2f> pos = RandomParticles(1024, min_d);
     for(Vec2f const&p : pos) {
         // Need to nudge the particles a bit so they don't "fall into each other" as much
         local_system->AddParticle(ParticleState((runi() < 0.5f) ? 1 : 2, p * 0.15f, rvel() * 0.0f));

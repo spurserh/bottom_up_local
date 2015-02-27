@@ -23,31 +23,48 @@ void ConstantDensityPointSearcher::Build(std::vector<Vec2f> const&points) {
     original_points_.clear();
     dbg_max_points_considered = 0;
     
-    set<Vec2i> cells;
-    multimap<Vec2i, size_t> points_by_cell;
-    for(size_t pi = 0;pi < points.size();++pi) {
-        Vec2f const&p = points[pi];
-        const Vec2i cell = CellForPoint(p);
-        cells.insert(cell);
-        points_by_cell.insert(multimap<Vec2i, size_t>::value_type(cell, pi));
-    }
-    
-    for(Vec2i const&cell : cells) {
-        Extrema1i cell_indices(Vec1i((int)ref_points_.size()), Vec1i(-1));
-        for(int row = -1;row <= 1;++row) {
-            for(int col = -1;col <= 1;++col) {
-                const Vec2i this_cell(cell + Vec2i(col, row));
-                for(multimap<Vec2i, size_t>::const_iterator it = points_by_cell.lower_bound(this_cell);
-                    it != points_by_cell.upper_bound(this_cell);
-                    ++it) {
-                    ref_points_.push_back(it->second);
+    if(points.size() > 0) {
+        Extrema2i cell_extents(Vec2i(INT_MAX, INT_MAX), Vec2i(INT_MIN, INT_MIN));
+        for(size_t pi = 0;pi < points.size();++pi) {
+            Vec2f const&p = points[pi];
+            const Vec2i cell = CellForPoint(p);
+            cell_extents.DoEnclose(cell);
+            cell_extents.DoEnclose(cell + Vec2i(1,1));
+        }
+        
+        vector<vector<int> > points_by_cell;
+        points_by_cell.resize(cell_extents.GetSize().width * cell_extents.GetSize().height);
+        
+        for(int pi = 0;pi < points.size();++pi) {
+            Vec2f const&p = points[pi];
+            const Vec2i cell = CellForPoint(p);
+            const Vec2i array_cell = cell - cell_extents.mMin;
+            points_by_cell[array_cell.y * cell_extents.GetSize().width + array_cell.x].push_back(pi);
+        }
+        
+        for(int cell_row = cell_extents.mMin.y;cell_row < cell_extents.mMax.y;++cell_row) {
+            for(int cell_col = cell_extents.mMin.x;cell_col < cell_extents.mMax.x;++cell_col) {
+                const Vec2i cell(cell_col, cell_row);
+                Extrema1i cell_indices(Vec1i((int)ref_points_.size()), Vec1i(-1));
+                for(int row = -1;row <= 1;++row) {
+                    for(int col = -1;col <= 1;++col) {
+                        const Vec2i this_cell(cell + Vec2i(col, row));
+                        const Vec2i this_array_cell = this_cell - cell_extents.mMin;
+                        if(this_array_cell.x >= 0 && this_array_cell.y >= 0 &&
+                           this_array_cell.x < cell_extents.GetSize().width &&
+                           this_array_cell.y < cell_extents.GetSize().height) {
+                            for(const int o_pt_idx : points_by_cell[this_array_cell.y * cell_extents.GetSize().width + this_array_cell.x]) {
+                                ref_points_.push_back(o_pt_idx);
+                            }
+                        }
+                    }
                 }
+                cell_indices.mMax[0] = (int)ref_points_.size();
+                point_indices_to_consider_for_cell_.insert(
+                    map<Vec2i, Extrema1i>::value_type(cell, cell_indices));
+                dbg_max_points_considered = std::max(dbg_max_points_considered, cell_indices.mMax[0] - cell_indices.mMin[0]);
             }
         }
-        cell_indices.mMax[0] = (int)ref_points_.size();
-        point_indices_to_consider_for_cell_.insert(
-            map<Vec2i, Extrema1i>::value_type(cell, cell_indices));
-        dbg_max_points_considered = std::max(dbg_max_points_considered, cell_indices.mMax[0] - cell_indices.mMin[0]);
     }
     
     fprintf(stderr, "dbg_max_points_considered %i\n", dbg_max_points_considered);
